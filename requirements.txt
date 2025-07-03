@@ -1,4 +1,0 @@
-deepface==0.0.79
-numpy
-scikit-learn
-gdown
