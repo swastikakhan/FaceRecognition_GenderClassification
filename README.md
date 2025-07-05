@@ -72,6 +72,8 @@ This repository contains the complete solution for both Task A and Task B of COM
 
 > No model weights are saved in Task B, as no classifier is trained.
 
+- At the time of model development, it was not specified that separate training and testing metrics would be required. Due to time constraints during submission, we are reporting the evaluation results obtained from our combined training and validation process.
+- However, in the submitted code, we have updated the evaluation metrics for ease of verification.
 ---
 
 ## Requirements
