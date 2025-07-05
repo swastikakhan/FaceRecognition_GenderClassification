@@ -1,126 +1,123 @@
 import os
-import zipfile
-import numpy as np
 import torch
-import joblib
-from PIL import Image, ImageEnhance
-from facenet_pytorch import MTCNN, InceptionResnetV1
-from sklearn.svm import SVC
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.neural_network import MLPClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import GridSearchCV
-from tqdm import tqdm
+import torch.nn as nn
+import torch.optim as optim
+from torchvision import datasets, transforms
+from efficientnet_pytorch import EfficientNet
+from torch.utils.data import DataLoader
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
-# --- Device setup ---
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+# Paths
+data_dir = '/content/drive/MyDrive/Task_A'
 
-# --- Models ---
-mtcnn = MTCNN(image_size=160, margin=0, min_face_size=20,
-              thresholds=[0.4, 0.5, 0.5], device=device)
-facenet = InceptionResnetV1(pretrained='vggface2').eval().to(device)
+train_dir = os.path.join(data_dir, 'train')
+val_dir = os.path.join(data_dir, 'val')
 
-# --- Embedding extraction ---
-def get_embedding(img_path):
-    try:
-        img = Image.open(img_path).convert('RGB')
-        if img.size[0] < 160 or img.size[1] < 160:
-            img = img.resize((160, 160), Image.Resampling.LANCZOS)
-        face = mtcnn(img)
-        if face is None:
-            enhancer = ImageEnhance.Contrast(img)
-            face = mtcnn(enhancer.enhance(2.0))
-        if face is None:
-            return None
-        with torch.no_grad():
-            emb = facenet(face.unsqueeze(0).to(device)).squeeze().cpu().numpy()
-            return emb / np.linalg.norm(emb)
-    except:
-        return None
+# Device
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# --- Dataset loading ---
-def load_dataset(folder):
-    X, y = [], []
-    for person in sorted(os.listdir(folder)):
-        person_dir = os.path.join(folder, person)
-        if not os.path.isdir(person_dir):
-            continue
-        for root, _, files in os.walk(person_dir):
-            for file in files:
-                if file.lower().endswith(('.jpg', '.jpeg', '.png')):
-                    img_path = os.path.join(root, file)
-                    emb = get_embedding(img_path)
-                    if emb is not None:
-                        X.append(emb)
-                        y.append(person)
-    return np.array(X), np.array(y)
+# Transforms
+input_size = 224
+train_transform = transforms.Compose([
+    transforms.Resize((input_size, input_size)),
+    transforms.RandomHorizontalFlip(),
+    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+    transforms.RandomRotation(10),
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406],
+                         [0.229, 0.224, 0.225])
+])
 
-# --- Path setup (edit this as needed) ---
-train_dir = '/content/Comsys_Hackathon5/Task_A/train'
-val_dir = '/content/Comsys_Hackathon5/Task_A/val'
+val_transform = transforms.Compose([
+    transforms.Resize((input_size, input_size)),
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406],
+                         [0.229, 0.224, 0.225])
+])
 
-# --- Load data ---
-X_train, y_train = load_dataset(train_dir)
-X_val, y_val = load_dataset(val_dir)
+# Datasets and loaders
+train_dataset = datasets.ImageFolder(train_dir, transform=train_transform)
+val_dataset = datasets.ImageFolder(val_dir, transform=val_transform)
 
-# --- Label encoding ---
-le = LabelEncoder()
-y_train_enc = le.fit_transform(y_train)
-y_val_enc = le.transform(y_val)
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 
-# --- Model training ---
-models = {}
+# Model
+model = EfficientNet.from_pretrained('efficientnet-b0')
+model._fc = nn.Linear(model._fc.in_features, 2)
+model = model.to(device)
 
-# 1. Linear SVM
-svm_linear = SVC(kernel='linear', probability=True, class_weight='balanced')
-svm_linear.fit(X_train, y_train_enc)
-models['Linear SVM'] = svm_linear
+# Loss and optimizer
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=2e-4)
+scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=5)
 
-# 2. RBF SVM
-param_grid = {
-    'C': [1, 10],
-    'gamma': ['scale', 0.01],
-    'class_weight': ['balanced']
-}
-svm_rbf = GridSearchCV(SVC(kernel='rbf', probability=True), param_grid,
-                       cv=3, scoring='accuracy', n_jobs=-1)
-svm_rbf.fit(X_train, y_train_enc)
-models['RBF SVM'] = svm_rbf.best_estimator_
+# Training loop
+best_val_acc = 0.0
+final_train_preds = []
+final_train_labels = []
+final_val_preds = []
+final_val_labels = []
 
-# 3. Random Forest
-rf = RandomForestClassifier(n_estimators=200, class_weight='balanced', random_state=42, n_jobs=-1)
-rf.fit(X_train, y_train_enc)
-models['Random Forest'] = rf
+for epoch in range(1, 7):
+    model.train()
+    all_train_preds, all_train_labels = [], []
+    for images, labels in train_loader:
+        images, labels = images.to(device), labels.to(device)
 
-# 4. MLP
-mlp = MLPClassifier(hidden_layer_sizes=(512, 256, 128), max_iter=500, random_state=42)
-mlp.fit(X_train, y_train_enc)
-models['MLP'] = mlp
+        optimizer.zero_grad()
+        outputs = model(images)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
 
-# --- Select best model based on validation accuracy ---
-best_model = None
-best_acc = 0
-for name, model in models.items():
-    preds = model.predict(X_val)
-    acc = accuracy_score(y_val_enc, preds)
-    if acc > best_acc:
-        best_model = model
-        best_preds = preds
-        best_acc = acc
+        preds = torch.argmax(outputs, 1)
+        all_train_preds.extend(preds.cpu().numpy())
+        all_train_labels.extend(labels.cpu().numpy())
 
-# --- Final metrics ---
-accuracy = accuracy_score(y_val_enc, best_preds)
-precision = precision_score(y_val_enc, best_preds, average='weighted')
-recall = recall_score(y_val_enc, best_preds, average='weighted')
-f1 = f1_score(y_val_enc, best_preds, average='weighted')
+    train_acc = accuracy_score(all_train_labels, all_train_preds)
+    scheduler.step()
 
-print("Final Evaluation (Task A)")
-print(f"Accuracy : {accuracy:.4f}")
-print(f"Precision: {precision:.4f}")
-print(f"Recall   : {recall:.4f}")
-print(f"F1 Score : {f1:.4f}")
+    model.eval()
+    all_val_preds, all_val_labels = [], []
+    with torch.no_grad():
+        for images, labels in val_loader:
+            images, labels = images.to(device), labels.to(device)
+            outputs = model(images)
+            preds = torch.argmax(outputs, 1)
+            all_val_preds.extend(preds.cpu().numpy())
+            all_val_labels.extend(labels.cpu().numpy())
 
-# --- Save model and label encoder ---
-joblib.dump(best_model, 'best_face_recognition_model.pkl')
-joblib.dump(le, 'label_encoder.pkl')
+    val_acc = accuracy_score(all_val_labels, all_val_preds)
+    print(f"Epoch {epoch} done | Training Acc: {train_acc:.4f} | Val Acc: {val_acc:.4f}")
+
+    if val_acc > best_val_acc:
+        best_val_acc = val_acc
+        torch.save(model.state_dict(), "best_gender_model.pt")
+
+    # Save final epoch preds for metrics
+    final_train_preds = all_train_preds
+    final_train_labels = all_train_labels
+    final_val_preds = all_val_preds
+    final_val_labels = all_val_labels
+
+# Final Metrics
+train_precision, train_recall, train_f1, _ = precision_recall_fscore_support(
+    final_train_labels, final_train_preds, average='binary')
+train_acc = accuracy_score(final_train_labels, final_train_preds)
+
+val_precision, val_recall, val_f1, _ = precision_recall_fscore_support(
+    final_val_labels, final_val_preds, average='binary')
+val_acc = accuracy_score(final_val_labels, final_val_preds)
+
+print("\nFinal Training Scores:")
+print(f"Accuracy : {train_acc:.4f}")
+print(f"Precision: {train_precision:.4f}")
+print(f"Recall   : {train_recall:.4f}")
+print(f"F1 Score : {train_f1:.4f}")
+
+print("\nFinal Validation Scores:")
+print(f"Accuracy : {val_acc:.4f}")
+print(f"Precision: {val_precision:.4f}")
+print(f"Recall   : {val_recall:.4f}")
+print(f"F1 Score : {val_f1:.4f}")
