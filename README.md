@@ -24,8 +24,7 @@ This repository contains the complete solution for both Task A and Task B of COM
     - Precision
     - Recall
     - F1 Score
-  - Best model saved as: `best_face_recognition_model.pkl`
-  - Label encoder saved as: `label_encoder.pkl`
+  - Best model saved as: `best_gender_model.pt`
 
 ---
 
