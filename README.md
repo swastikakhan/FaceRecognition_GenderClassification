@@ -1,106 +1,83 @@
-FaceRecognition_GenderClassification 🧠
-Repository: swastikakhan/FaceRecognition_GenderClassification
+# COMSYS Hackathon5 – Final Submission
 
-📌 Overview
-This codebase contains models for both Task A (Gender Classification) and Task B (Face Recognition) under challenging visual conditions, using the FACECOM dataset:
+This repository contains the complete solution for both Task A and Task B of COMSYS Hackathon 5.
 
-Task A: Binary gender classification (Male/Female).
+---
 
-Task B: Multi-class face recognition across identities.
+## How to Run
 
-Data perturbations: Blur, fog, low-light, rain, overexposure.
+### Task A – Multi-class Face Recognition
 
-📁 Repository Structure
-bash
-Copy
-Edit
-/
-├── TaskA_98.ipynb            # Gender Classification Jupyter notebook (98% accuracy)
-├── TaskB_88.ipynb            # Face Recognition notebook (~88% accuracy)
-├── male_female_augmented.ipynb  # Data augmentation script for Task A
-├── requirements.txt          # Python dependencies
-└── README.md                 # (this file)
-📥 Dataset
-FACECOM dataset download:
-Link: https://drive.google.com/file/d/1LgjPFk7tgCRhJVfL8SCKX9Z1N2wK4_6_/view
+- **File**: `task_A_submission.py`
+- **To run**:
+  1. Place the dataset in the required folder structure.
+  2. Change the `train_dir` and `val_dir` variables at the top of the script if necessary.
+  3. Execute the script:
 
-Directory structure:
+     ```bash
+     python task_A_submission.py
+     ```
 
-bash
-Copy
-Edit
-data/
-├── TaskA/
-│   ├── train/male/…, train/female/
-│   └── val/male/…, val/female/
-└── TaskB/
-    ├── <person_id_1>/…      # face images per identity
-    ├── <person_id_2>/…
-    └── distorted/…          # perturbed test images
-🧠 Methodology
-Task A – Gender Classification
-Notebook: TaskA_98.ipynb
+- **Outputs**:
+  - Final evaluation metrics:
+    - Accuracy
+    - Precision
+    - Recall
+    - F1 Score
+  - Best model saved as: `best_face_recognition_model.pkl`
+  - Label encoder saved as: `label_encoder.pkl`
 
-Process:
+---
 
-Load and split dataset.
+### Task B – Face Verification
 
-Apply augmentations (e.g., blur, brightness, contrast).
+- **File**: `task_B_submission.py`
+- **To run**:
+  1. Make sure the dataset is structured as `train/` and `val/` directories.
+  2. Set the correct paths in the script (`train_dir`, `val_dir`).
+  3. Run the script:
 
-Train using a CNN backbone (e.g., ResNet or EfficientNet).
+     ```bash
+     python task_B_submission.py
+     ```
 
-Metrics: Accuracy, Precision, Recall, F1‑Score.
+- **Outputs**:
+  - Top-1 Accuracy
+  - Macro-averaged F1 Score
 
-Achieved ~98% accuracy on validation.
+> This script does not train a model. It uses a pretrained FaceNet-based embedding extractor and performs verification using cosine similarity with an ROC-optimized threshold.
 
-Task B – Face Recognition
-Notebook: TaskB_88.ipynb
+---
 
-Process:
+## Model Architectures
 
-Load multi-class dataset with identity labels.
+### Task A
 
-Use CNN backbone + ArcFace/CosFace (softmax with margin).
+- **Face Detection**: MTCNN from `facenet-pytorch`
+- **Embedding Network**: InceptionResnetV1 (pretrained on VGGFace2)
+- **Classifier Candidates**:
+  - Linear SVM
+  - RBF SVM (with GridSearch)
+  - Random Forest
+  - MLP (Neural Network)
+- The classifier with the best validation accuracy is selected and saved.
 
-Train and evaluate: Top-1 Accuracy, macro F1‑score.
+### Task B
 
-Achieved ~88% Top-1 accuracy under distorted conditions.
+- **Face Detection**: MTCNN
+- **Embedding Model**: InceptionResnetV1 (pretrained)
+- **Verification Method**:
+  - Cosine similarity is computed between face embeddings.
+  - A similarity threshold is selected using the ROC curve from training pairs.
+  - Final predictions are made based on whether a pair’s similarity exceeds the threshold.
 
-Data Augmentation
-Script: male_female_augmented.ipynb
+> No model weights are saved in Task B, as no classifier is trained.
 
-Techniques include:
+---
 
-Motion blur, fog simulation
+## Requirements
 
-Additive noise, uneven lighting
+Install all dependencies using:
 
-Hue/contrast variations
-
-🚀 Getting Started
-Setup
-bash
-Copy
-Edit
-git clone https://github.com/swastikakhan/FaceRecognition_GenderClassification.git
-cd FaceRecognition_GenderClassification
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-How to Run
-Download and unzip the FACECOM dataset into the data/ directory.
-
-Launch notebooks:
-
-bash
-Copy
-Edit
-jupyter notebook TaskA_98.ipynb
-jupyter notebook TaskB_88.ipynb
-Inspect male_female_augmented.ipynb for augmentation strategies.
-
-📊 Results
-Task	Validation Accuracy
-Gender Classification (Task A)	98 %
-Face Recognition (Task B)	88 % Top‑1
-
+```bash
+pip install torch torchvision facenet-pytorch scikit-learn numpy pillow tqdm matplotlib
