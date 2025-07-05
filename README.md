@@ -55,14 +55,11 @@ This repository contains the complete solution for both Task A and Task B of COM
 
 ### Task A
 
-- **Face Detection**: MTCNN from `facenet-pytorch`
-- **Embedding Network**: InceptionResnetV1 (pretrained on VGGFace2)
-- **Classifier Candidates**:
-  - Linear SVM
-  - RBF SVM (with GridSearch)
-  - Random Forest
-  - MLP (Neural Network)
-- The classifier with the best validation accuracy is selected and saved.
+- **Backbone**: EfficientNet-B0 (pretrained on ImageNet)
+- **Classifier Head**: Replaced `_fc` with `nn.Linear(in_features=1280, out_features=2)`
+- **Loss Function**: CrossEntropyLoss; Optimizer: Adam (lr=2e-4); Scheduler: CosineAnnealingLR
+- **Best model saved** as `best_gender_model.pt` based on validation accuracy
+
 
 ### Task B
 
