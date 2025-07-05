@@ -41,8 +41,11 @@ This repository contains the complete solution for both Task A and Task B of COM
      ```
 
 - **Outputs**:
-  - Top-1 Accuracy
-  - Macro-averaged F1 Score
+  - Final evaluation metrics:
+    - Accuracy
+    - Precision
+    - Recall
+    - F1 Score
 
 > This script does not train a model. It uses a pretrained FaceNet-based embedding extractor and performs verification using cosine similarity with an ROC-optimized threshold.
 
