@@ -79,4 +79,5 @@ This repository contains the complete solution for both Task A and Task B of COM
 Install all dependencies using:
 
 ```bash
-pip install torch torchvision facenet-pytorch scikit-learn numpy pillow tqdm matplotlib
+pip install torch torchvision facenet-pytorch efficientnet-pytorch scikit-learn numpy pillow tqdm matplotlib
+
